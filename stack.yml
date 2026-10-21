@@ -1,0 +1,43 @@
+# docker stack deploy -c stack.yml builder
+# Needs scripts/buildkitd.sh run first (it creates the buildnet network), and
+# the panel's network (panelnet) to exist.
+services:
+  module:
+    image: ghcr.io/modularnost/builder-module:latest
+    networks: [panelnet, buildnet]
+    volumes:
+      - builder_data:/data
+    environment:
+      PANEL_CORE_URL: http://panel:8080
+      # TRAEFIK_ENTRYPOINT: websecure
+      # TRAEFIK_RESOLVER: le          # empty serves plain HTTP
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        panel.module: "true"
+        panel.module.name: builder
+        panel.module.version: "0.1.0"
+
+  registry:
+    image: registry:2
+    networks: [buildnet]
+    volumes:
+      - registry_data:/var/lib/registry
+    ports:
+      # Every node pulls from 127.0.0.1:5000, which Docker trusts without TLS.
+      # Keep the port closed to the outside in the panel's firewall.
+      - "5000:5000"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+networks:
+  panelnet:
+    external: true
+  buildnet:
+    external: true
+
+volumes:
+  builder_data:
+  registry_data:
