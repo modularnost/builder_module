@@ -9,6 +9,7 @@ services:
       - builder_data:/data
     environment:
       PANEL_CORE_URL: http://panel:8080
+      REGISTRY_PULL: "${REGISTRY_PULL:?Set REGISTRY_PULL to a protected registry endpoint reachable from every Swarm node}"
       # TRAEFIK_ENTRYPOINT: websecure
       # TRAEFIK_RESOLVER: le          # empty serves plain HTTP
     deploy:
@@ -24,10 +25,6 @@ services:
     networks: [buildnet]
     volumes:
       - registry_data:/var/lib/registry
-    ports:
-      # Every node pulls from 127.0.0.1:5000, which Docker trusts without TLS.
-      # Keep the port closed to the outside in the panel's firewall.
-      - "5000:5000"
     deploy:
       placement:
         constraints: [node.role == manager]
