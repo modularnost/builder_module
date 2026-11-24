@@ -25,6 +25,12 @@ A Swarm service cannot be `--privileged`, so BuildKit runs as a plain container
 on one node. BuildKit and the registry require mutually authenticated TLS on
 `buildnet`. The module has no `docker.sock`; the panel creates the service.
 
+Dockerfile `RUN` steps use a separate worker bridge. They can reach public
+IPv4 dependencies. The firewall blocks the daemon, the Swarm overlay and
+gateway subnets, private and link-local IPv4 ranges, and IPv6. The worker
+uses the public resolvers in `scripts/buildkitd.toml`. BuildKit itself still
+uses `buildnet` for registry exports.
+
 ## Install
 
 Provision two separate, dedicated CAs, one for BuildKit and one for the

@@ -10,7 +10,7 @@ BUILDKIT_IMAGE="${BUILDKIT_IMAGE:-moby/buildkit:v0.35.1@sha256:baf6138eb8c376448
 NET="${BUILD_NETWORK:-buildnet}"
 : "${BUILDKIT_TLS_DIR:?Set BUILDKIT_TLS_DIR to the directory with the daemon and registry client certificates}"
 TLS_DIR=$(cd "$BUILDKIT_TLS_DIR" && pwd)
-CONFIG=$(cd "$(dirname "$0")" && pwd)/buildkitd.toml
+SCRIPTS=$(cd "$(dirname "$0")" && pwd)
 
 for name in buildkit-ca.pem buildkit-server.pem buildkit-server-key.pem \
 	registry-ca.pem registry-client.pem registry-client-key.pem; do
@@ -21,12 +21,15 @@ docker network inspect "$NET" >/dev/null 2>&1 ||
 	docker network create --driver overlay --attachable "$NET"
 
 docker image inspect "$BUILDKIT_IMAGE" >/dev/null 2>&1 || docker pull "$BUILDKIT_IMAGE"
+BLOCKED_SUBNETS=$(docker network inspect --format '{{range .IPAM.Config}}{{println .Subnet}}{{end}}' "$NET" docker_gwbridge)
 docker rm -f buildkitd >/dev/null 2>&1 || true
 docker run -d --name buildkitd --restart always --privileged \
 	--network "$NET" --network-alias buildkitd \
+	--env "BUILDKIT_BLOCKED_SUBNETS=$BLOCKED_SUBNETS" \
 	-v buildkitd_state:/var/lib/buildkit \
 	--mount "type=bind,src=$TLS_DIR,dst=/etc/buildkit/tls,readonly" \
-	--mount "type=bind,src=$CONFIG,dst=/etc/buildkit/buildkitd.toml,readonly" \
-	"$BUILDKIT_IMAGE"
+	--mount "type=bind,src=$SCRIPTS/buildkitd.toml,dst=/etc/buildkit/buildkitd.toml,readonly" \
+	--mount "type=bind,src=$SCRIPTS/buildkitd-network.sh,dst=/etc/buildkit/network.sh,readonly" \
+	--entrypoint /bin/sh "$BUILDKIT_IMAGE" /etc/buildkit/network.sh
 
 echo "buildkitd is running on network $NET as buildkitd:1234"
