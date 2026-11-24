@@ -8,10 +8,38 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestBuildAdmissionLimitsConcurrentApps(t *testing.T) {
+	s := &server{builds: make(map[string]*build)}
+	var started atomic.Int32
+	var wg sync.WaitGroup
+	for i := range 10 {
+		wg.Go(func() {
+			if _, err := s.start(strconv.Itoa(i)); err == nil {
+				started.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	if got := started.Load(); got != maxActiveBuilds {
+		t.Fatalf("started %d builds, want %d", got, maxActiveBuilds)
+	}
+	for name, b := range s.builds {
+		if _, err := s.start(name); err == nil {
+			t.Fatal("accepted a second build for the same app")
+		}
+		s.finish(App{Name: name}, b, "", errors.New("build failed"))
+		break
+	}
+	if _, err := s.start("another"); err != nil {
+		t.Fatalf("capacity did not return after failure: %v", err)
+	}
+}
 
 func TestRunRespectsCancellation(t *testing.T) {
 	executable, err := os.Executable()

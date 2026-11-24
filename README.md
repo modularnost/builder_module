@@ -9,6 +9,9 @@ contract 3. For private pulls, the panel must support
 [`panel.module.pull-registry`](https://github.com/modularnost/panel/blob/main/docs/modules.md#asking-the-core-to-act)
 and have registry credential encryption configured.
 
+Builder runs up to two builds at a time. If both slots are busy, retry after a
+build finishes.
+
 Status: first version, **not yet run on a cluster**. One button builds and
 deploys; there is no build on push, no private repositories and no removing an
 app yet.

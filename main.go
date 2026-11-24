@@ -171,7 +171,10 @@ type server struct {
 	mu     sync.Mutex
 	apps   []App
 	builds map[string]*build
+	active int
 }
+
+const maxActiveBuilds = 2
 
 func (s *server) load() error {
 	s.builds = map[string]*build{}
@@ -314,12 +317,25 @@ func (s *server) start(name string) (*build, error) {
 	if b := s.builds[name]; b != nil && b.Status == "running" {
 		return nil, errors.New(name + " is already building")
 	}
+	if s.active >= maxActiveBuilds {
+		return nil, errors.New("Builder is busy. Try again when a build finishes.")
+	}
 	b := &build{Status: "running", notify: changed}
 	s.builds[name] = b
+	s.active++
 	return b, nil
 }
 
 func (s *server) finish(a App, b *build, tag string, err error) {
+	s.mu.Lock()
+	if err == nil {
+		if i := slices.IndexFunc(s.apps, func(x App) bool { return x.Name == a.Name }); i >= 0 {
+			s.apps[i].Tag = tag
+			if e := s.save(); e != nil {
+				log.Printf("saving: %v", e)
+			}
+		}
+	}
 	b.mu.Lock()
 	if err != nil {
 		b.Status = "failed"
@@ -329,16 +345,8 @@ func (s *server) finish(a App, b *build, tag string, err error) {
 		fmt.Fprintf(&b.log, "\ndone: %s runs %s\n", serviceName(a.Name), tag)
 	}
 	b.mu.Unlock()
-	if err == nil {
-		s.mu.Lock()
-		if i := slices.IndexFunc(s.apps, func(x App) bool { return x.Name == a.Name }); i >= 0 {
-			s.apps[i].Tag = tag
-			if e := s.save(); e != nil {
-				log.Printf("saving: %v", e)
-			}
-		}
-		s.mu.Unlock()
-	}
+	s.active--
+	s.mu.Unlock()
 	changed()
 }
 
@@ -556,7 +564,6 @@ func main() {
 		if err != nil {
 			return "", err
 		}
-		// ponytail: any number of apps build at once, one build per app; a queue if BuildKit chokes
 		go func() {
 			tag, err := s.runBuild(a, b)
 			s.finish(a, b, tag, err)
