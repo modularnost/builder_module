@@ -13,7 +13,7 @@ services:
       - {source: builder_buildkit_client_key, target: buildkit-client-key.pem, uid: "10001", gid: "10001", mode: 0400}
     environment:
       PANEL_CORE_URL: http://panel:8080
-      REGISTRY_PULL: "${REGISTRY_PULL:?Set REGISTRY_PULL to a protected registry endpoint reachable from every Swarm node}"
+      REGISTRY_PULL: "${REGISTRY_PULL:?Set REGISTRY_PULL to an authenticated HTTPS registry host reachable from every Swarm node}"
       # TRAEFIK_ENTRYPOINT: websecure
       # TRAEFIK_RESOLVER: le          # empty serves plain HTTP
     deploy:
@@ -23,6 +23,7 @@ services:
         panel.module: "true"
         panel.module.name: builder
         panel.module.version: "0.1.0"
+        panel.module.pull-registry: "${REGISTRY_PULL}"
 
   registry:
     image: registry:3@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c

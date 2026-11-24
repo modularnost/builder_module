@@ -5,7 +5,9 @@ Builds a repository and runs it, for the
 builds its Dockerfile with BuildKit, pushes the image to a registry and creates
 the service (or moves it to the new tag). Permissions: `service:read`,
 `service:create`. Needs a panel with `service:create` and the `code` block, and
-contract 3.
+contract 3. For private pulls, the panel must support
+[`panel.module.pull-registry`](https://github.com/modularnost/panel/blob/main/docs/modules.md#asking-the-core-to-act)
+and have registry credential encryption configured.
 
 Status: first version, **not yet run on a cluster**. One button builds and
 deploys; there is no build on push, no private repositories and no removing an
@@ -63,17 +65,47 @@ BUILDKIT_TLS_DIR=/etc/builder/buildkit-tls sh scripts/buildkitd.sh
 REGISTRY_PULL=registry.internal.example docker stack deploy -c stack.yml builder
 ```
 
-Then open **Builder** in the panel (admin only), add an app and press **Build
-and deploy**. A domain makes the module add Traefik labels; leave it empty to
-run the service without a route.
+### Authenticated pull endpoint
 
-Before deploying apps, provision a protected endpoint for the same registry
-storage. For a TLS proxy on a private network, restrict ingress to eligible
-Swarm nodes and forward only `GET` and `HEAD` to
-`https://registry:5000` from `buildnet`. Configure upstream certificate
-verification using the registry CA and give the proxy its own registry client
-certificate. Keep the proxy and its certificate trusted as registry clients.
-Point `REGISTRY_PULL` at the proxy hostname, without a URL scheme.
+Use [the Caddy configuration](scripts/registry-pull.Caddyfile) or configure
+your existing HTTPS proxy with the same rules. Require Basic Auth for reads,
+allow only `GET` and `HEAD` on `/v2/`, and verify the registry's certificate
+while authenticating upstream with the proxy's own registry client certificate.
+Keep `registry:5000` unpublished on `buildnet`. Docker NAT can give workloads
+the same source IP as their node, so use IP allowlisting as an additional
+filter.
+
+For Caddy, create a root-only directory `/etc/builder/registry-pull` containing
+`proxy.pem` (the HTTPS certificate chain for the pull hostname),
+`proxy-key.pem`, `registry-ca.pem`, and the proxy's own
+`registry-client.pem` and `registry-client-key.pem`. Generate a random pull
+token, hash it with `caddy hash-password`, and put `builder-pull <bcrypt hash>`
+in the directory's `users` file. Keep the original token for the panel.
+Run Caddy on a Swarm node connected to the attachable `buildnet` overlay.
+For example, with DNS pointing at the node's private address:
+
+```sh
+docker run -d --name builder-pull-proxy --restart unless-stopped \
+  --network buildnet -p 192.0.2.10:443:443 \
+  -e REGISTRY_PULL_HOST=registry.internal.example \
+  --mount "type=bind,src=$PWD/scripts/registry-pull.Caddyfile,dst=/etc/caddy/Caddyfile,readonly" \
+  --mount type=bind,src=/etc/builder/registry-pull,dst=/etc/registry-pull,readonly \
+  caddy:2.11.7@sha256:36c24ad91a7ff7bc4c87fe22bfa8df3c4b18da0773d73fc12ee2c52b98c0bb7e
+```
+
+Every eligible node's Docker engine must resolve the pull hostname and trust
+its HTTPS certificate. For a private CA, install it on each node at
+`/etc/docker/certs.d/<host[:port]>/ca.crt`. In the panel, save the username
+`builder-pull` and the original token for the exact host and optional port
+used in `REGISTRY_PULL`, without a URL scheme. The stack configures the
+module's pull registry label from that value.
+
+From a Swarm node, check that an anonymous HTTPS request to `/v2/` returns
+`401` and that `docker login <host[:port]>` succeeds with the pull token.
+
+Open **Builder** in the panel (admin only), add an app and press **Build and
+deploy**. A domain makes the module add Traefik labels. Leave it empty to run
+the service without a route.
 
 ## Upgrade
 
@@ -94,6 +126,10 @@ docker run --rm -v builder_builder_data:/data alpine:3.22 \
 ```
 
 Repeat the installation steps to replace the daemon and deploy the stack.
+When moving an existing pull endpoint to Basic Auth, save the credentials
+in the panel and refresh existing Swarm services' pull credentials before
+enforcing authentication. Log in to the registry on the manager and use
+`docker service update --with-registry-auth <service>` for each existing app.
 Existing apps keep their image hostname. If the protected hostname changes,
 update their service image references before the next build.
 
@@ -104,7 +140,7 @@ update their service image references before the next build.
 | `PANEL_CORE_URL` | `http://panel:8080` | |
 | `BUILDKIT_ADDR` | `tcp://buildkitd:1234` | TCP uses the BuildKit client secrets |
 | `REGISTRY_PUSH` | `registry:5000` | HTTPS push target configured in `scripts/buildkitd.toml` |
-| `REGISTRY_PULL` | required in the stack | protected endpoint used in the image reference |
+| `REGISTRY_PULL` | required in the stack | authenticated HTTPS pull host and optional port |
 | `TRAEFIK_ENTRYPOINT` | `websecure` | |
 | `TRAEFIK_RESOLVER` | `le` | empty serves plain HTTP |
 | `DATA_DIR` | `/data` | the list of apps |
