@@ -32,3 +32,7 @@ creates and updates services on Builder's behalf.
 ```sh
 go test ./...
 ```
+
+## License
+
+Builder's source code is available under the [MIT License](LICENSE).
