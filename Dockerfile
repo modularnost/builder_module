@@ -16,6 +16,7 @@ RUN apk add --no-cache git ca-certificates \
     && chown 10001:10001 /data
 COPY --from=buildkit /usr/bin/buildctl /usr/bin/buildctl
 COPY --from=build /module /module
+COPY LICENSE /usr/share/licenses/builder-module/LICENSE
 USER 10001:10001
 VOLUME /data
 EXPOSE 8080
