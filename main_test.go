@@ -1,14 +1,30 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestRunRespectsCancellation(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	b := &build{notify: func() {}}
+	if err := run(ctx, b, t.TempDir(), executable); !errors.Is(err, context.Canceled) {
+		t.Fatalf("run returned %v, want context.Canceled", err)
+	}
+}
 
 func TestNewAppKeepsToASmallAlphabet(t *testing.T) {
 	ok := map[string]string{"name": "shop", "repo": "https://github.com/x/shop"}
