@@ -56,13 +56,13 @@ next build; the builder's update action changes only the image tag.
 | | Default | |
 | --- | --- | --- |
 | `PANEL_CORE_URL` | `http://panel:8080` | |
-| `PANEL_MODULE_NAME` | `builder` | must match the module's name in the panel |
 | `BUILDKIT_ADDR` | `tcp://buildkitd:1234` | |
 | `REGISTRY_PUSH` | `registry:5000` | where BuildKit pushes, on `buildnet` |
 | `REGISTRY_PULL` | required in the stack | protected endpoint used in the image reference |
 | `TRAEFIK_ENTRYPOINT` | `websecure` | |
 | `TRAEFIK_RESOLVER` | `le` | empty serves plain HTTP |
 | `DATA_DIR` | `/data` | the list of apps |
+| `PANEL_MODULE_NAME` | `builder` | must match the module's name in the panel |
 
 ## Develop
 
