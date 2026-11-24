@@ -210,6 +210,7 @@ func (s *server) app(name string) (App, bool) {
 // believed only once the core accepted it: anything on the network can send a
 // header, and the token is what signs who is looking.
 var creds atomic.Pointer[[2]string]
+var checkingCredentials atomic.Bool
 
 func learn(r *http.Request) {
 	name, token := r.Header.Get("X-Panel-Module"), r.Header.Get("X-Panel-Token")
@@ -219,9 +220,16 @@ func learn(r *http.Request) {
 	if c := creds.Load(); c != nil && c[0] == name && c[1] == token {
 		return
 	}
-	if _, status, err := coreCall(name, token, http.MethodGet, "/internal/services", nil); err == nil && status == http.StatusOK {
-		creds.Store(&[2]string{name, token})
+	if !checkingCredentials.CompareAndSwap(false, true) {
+		return
 	}
+	// Discovery must return the manifest before the panel can authorize our callback.
+	go func() {
+		defer checkingCredentials.Store(false)
+		if _, status, err := coreCall(name, token, http.MethodGet, "/internal/services", nil); err == nil && status == http.StatusOK {
+			creds.Store(&[2]string{name, token})
+		}
+	}()
 }
 
 func sign(token, module, user, role string, unix int64) string {
@@ -249,6 +257,11 @@ func admin(r *http.Request, now time.Time) bool {
 
 // --- the core ---
 
+var coreClient = &http.Client{
+	Timeout:       5 * time.Second,
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
+
 func coreCall(module, token, method, p string, body any) ([]byte, int, error) {
 	var rd io.Reader
 	if body != nil {
@@ -262,13 +275,13 @@ func coreCall(module, token, method, p string, body any) ([]byte, int, error) {
 	req.Header.Set("X-Panel-Module", module)
 	req.Header.Set("X-Panel-Token", token)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := coreClient.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer resp.Body.Close()
-	out, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	return out, resp.StatusCode, nil
+	out, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	return out, resp.StatusCode, err
 }
 
 func core(method, p string, body any) ([]byte, error) {
@@ -470,6 +483,12 @@ func (s *server) detail(a App) []block {
 	}
 }
 
+func serveManifest(w http.ResponseWriter, r *http.Request) {
+	learn(r)
+	w.Header().Set("Content-Type", "application/json")
+	io.WriteString(w, manifest)
+}
+
 func main() {
 	s := &server{}
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
@@ -478,11 +497,7 @@ func main() {
 	if err := s.load(); err != nil {
 		log.Fatal(err)
 	}
-	http.HandleFunc("GET /manifest", func(w http.ResponseWriter, r *http.Request) {
-		learn(r)
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, manifest)
-	})
+	http.HandleFunc("GET /manifest", serveManifest)
 	http.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") })
 
 	http.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
