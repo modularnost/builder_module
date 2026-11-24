@@ -37,6 +37,7 @@ func env(k, def string) string {
 }
 
 var (
+	moduleName = env("PANEL_MODULE_NAME", "builder")
 	coreURL    = env("PANEL_CORE_URL", "http://panel:8080")
 	dataDir    = env("DATA_DIR", "/data")
 	buildkit   = env("BUILDKIT_ADDR", "tcp://buildkitd:1234")
@@ -212,7 +213,7 @@ var creds atomic.Pointer[[2]string]
 
 func learn(r *http.Request) {
 	name, token := r.Header.Get("X-Panel-Module"), r.Header.Get("X-Panel-Token")
-	if name == "" || token == "" {
+	if name != moduleName || token == "" {
 		return
 	}
 	if c := creds.Load(); c != nil && c[0] == name && c[1] == token {
@@ -232,10 +233,13 @@ func sign(token, module, user, role string, unix int64) string {
 // admin says whether the request came from the core for an admin: the signature
 // is checked with the token, and a five-minute window stops a replay.
 func admin(r *http.Request, now time.Time) bool {
+	if r.Header.Get("X-Panel-Module") != moduleName {
+		return false
+	}
 	learn(r)
 	c := creds.Load()
 	ts, err := strconv.ParseInt(r.Header.Get("X-Panel-Time"), 10, 64)
-	if c == nil || err != nil || now.Sub(time.Unix(ts, 0)).Abs() > 5*time.Minute {
+	if c == nil || c[0] != moduleName || err != nil || now.Sub(time.Unix(ts, 0)).Abs() > 5*time.Minute {
 		return false
 	}
 	user, role := r.Header.Get("X-Panel-User"), r.Header.Get("X-Panel-Role")
