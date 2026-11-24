@@ -151,3 +151,7 @@ update their service image references before the next build.
 ```sh
 go test ./...
 ```
+
+## License
+
+Builder's source code is available under the [MIT License](LICENSE).
