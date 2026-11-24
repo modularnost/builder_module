@@ -136,7 +136,10 @@ type build struct {
 	last   time.Time
 }
 
-const maxLog = 100 << 10 // the tail the page shows; a document may be 1 MiB
+const (
+	maxLog             = 100 << 10 // the tail the page shows; a document may be 1 MiB
+	logRefreshInterval = 3 * time.Second
+)
 
 func (b *build) Write(p []byte) (int, error) {
 	b.mu.Lock()
@@ -146,7 +149,7 @@ func (b *build) Write(p []byte) (int, error) {
 		b.log.Reset()
 		b.log.Write(tail)
 	}
-	due := time.Since(b.last) > time.Second
+	due := time.Since(b.last) >= logRefreshInterval
 	if due {
 		b.last = time.Now()
 	}
