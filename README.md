@@ -62,6 +62,7 @@ next build; the builder's update action changes only the image tag.
 | `TRAEFIK_ENTRYPOINT` | `websecure` | |
 | `TRAEFIK_RESOLVER` | `le` | empty serves plain HTTP |
 | `DATA_DIR` | `/data` | the list of apps |
+| `PANEL_MODULE_NAME` | `builder` | must match the module's name in the panel |
 
 ## Develop
 
