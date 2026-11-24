@@ -1,0 +1,33 @@
+{
+	admin off
+	auto_https disable_redirects
+}
+
+https://{$REGISTRY_PULL_HOST} {
+	tls /etc/registry-pull/proxy.pem /etc/registry-pull/proxy-key.pem
+
+	@pull {
+		path /v2/*
+		method GET HEAD
+	}
+	route {
+		handle @pull {
+			basic_auth {
+				import /etc/registry-pull/users
+			}
+			reverse_proxy https://registry:5000 {
+				header_up -Authorization
+				transport http {
+					tls_trust_pool file /etc/registry-pull/registry-ca.pem
+					tls_client_auth /etc/registry-pull/registry-client.pem /etc/registry-pull/registry-client-key.pem
+				}
+			}
+		}
+		handle /v2/* {
+			respond 405
+		}
+		handle {
+			respond 404
+		}
+	}
+}
