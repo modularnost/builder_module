@@ -1,0 +1,12 @@
+[grpc]
+  address = ["tcp://0.0.0.0:1234"]
+  [grpc.tls]
+    ca = "/etc/buildkit/tls/buildkit-ca.pem"
+    cert = "/etc/buildkit/tls/buildkit-server.pem"
+    key = "/etc/buildkit/tls/buildkit-server-key.pem"
+
+[registry."registry:5000"]
+  ca = ["/etc/buildkit/tls/registry-ca.pem"]
+  [[registry."registry:5000".keypair]]
+    cert = "/etc/buildkit/tls/registry-client.pem"
+    key = "/etc/buildkit/tls/registry-client-key.pem"

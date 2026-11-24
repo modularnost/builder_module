@@ -1,12 +1,16 @@
 # docker stack deploy -c stack.yml builder
-# Needs scripts/buildkitd.sh run first (it creates the buildnet network), and
-# the panel's network (panelnet) to exist.
+# Provision the external TLS secrets and run scripts/buildkitd.sh first.
+# The panel's network (panelnet) must already exist.
 services:
   module:
-    image: ghcr.io/modularnost/builder-module:latest
+    image: "${BUILDER_IMAGE:-ghcr.io/modularnost/builder-module:latest}"
     networks: [panelnet, buildnet]
     volumes:
       - builder_data:/data
+    secrets:
+      - {source: builder_buildkit_ca, target: buildkit-ca.pem, uid: "10001", gid: "10001", mode: 0400}
+      - {source: builder_buildkit_client, target: buildkit-client.pem, uid: "10001", gid: "10001", mode: 0400}
+      - {source: builder_buildkit_client_key, target: buildkit-client-key.pem, uid: "10001", gid: "10001", mode: 0400}
     environment:
       PANEL_CORE_URL: http://panel:8080
       REGISTRY_PULL: "${REGISTRY_PULL:?Set REGISTRY_PULL to a protected registry endpoint reachable from every Swarm node}"
@@ -21,10 +25,19 @@ services:
         panel.module.version: "0.1.0"
 
   registry:
-    image: registry:2
+    image: registry:3@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c
     networks: [buildnet]
     volumes:
       - registry_data:/var/lib/registry
+    environment:
+      REGISTRY_HTTP_TLS_CERTIFICATE: /run/secrets/registry.pem
+      REGISTRY_HTTP_TLS_KEY: /run/secrets/registry-key.pem
+      REGISTRY_HTTP_TLS_CLIENTCAS: '[/run/secrets/registry-ca.pem]'
+      REGISTRY_HTTP_RELATIVEURLS: "true"
+    secrets:
+      - {source: builder_registry_cert, target: registry.pem, mode: 0400}
+      - {source: builder_registry_key, target: registry-key.pem, mode: 0400}
+      - {source: builder_registry_ca, target: registry-ca.pem, mode: 0400}
     deploy:
       placement:
         constraints: [node.role == manager]
@@ -38,3 +51,11 @@ networks:
 volumes:
   builder_data:
   registry_data:
+
+secrets:
+  builder_buildkit_ca: {external: true}
+  builder_buildkit_client: {external: true}
+  builder_buildkit_client_key: {external: true}
+  builder_registry_cert: {external: true}
+  builder_registry_key: {external: true}
+  builder_registry_ca: {external: true}

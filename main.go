@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -324,13 +325,20 @@ func (s *server) finish(a App, b *build, tag string, err error) {
 	changed()
 }
 
-func run(b *build, dir string, name string, args ...string) error {
+func run(ctx context.Context, b *build, dir string, name string, args ...string) error {
 	fmt.Fprintf(b, "$ %s %s\n", name, strings.Join(args, " "))
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Dir = dir
 	cmd.Stdout, cmd.Stderr = b, b
 	cmd.Env = append(os.Environ(), "GIT_ALLOW_PROTOCOL=https", "GIT_TERMINAL_PROMPT=0")
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("%s: %w", name, ctx.Err())
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *server) runBuild(a App, b *build) (tag string, err error) {
@@ -341,22 +349,36 @@ func (s *server) runBuild(a App, b *build) (tag string, err error) {
 	defer os.RemoveAll(tmp)
 
 	src := filepath.Join(tmp, "src")
-	if err := run(b, tmp, "git", "clone", "--depth", "1", "--branch", a.Branch, "--", a.Repo, src); err != nil {
+	gitCtx, cancelGit := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancelGit()
+	if err := run(gitCtx, b, tmp, "git", "-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedTime=60",
+		"clone", "--depth", "1", "--branch", a.Branch, "--", a.Repo, src); err != nil {
 		return "", err
 	}
-	sha, err := exec.Command("git", "-C", src, "rev-parse", "--short=12", "HEAD").Output()
+	sha, err := exec.CommandContext(gitCtx, "git", "-C", src, "rev-parse", "--short=12", "HEAD").Output()
 	if err != nil {
 		return "", err
 	}
+	cancelGit()
 	tag = strings.TrimSpace(string(sha))
 
 	image := pushTo + "/" + a.Name + ":" + tag
-	err = run(b, src, "buildctl", "--addr", buildkit, "build", "--progress", "plain",
+	args := []string{"--addr", buildkit}
+	if strings.HasPrefix(buildkit, "tcp://") {
+		args = append(args,
+			"--tlscacert", "/run/secrets/buildkit-ca.pem",
+			"--tlscert", "/run/secrets/buildkit-client.pem",
+			"--tlskey", "/run/secrets/buildkit-client-key.pem")
+	}
+	args = append(args, "build", "--progress", "plain",
 		"--frontend", "dockerfile.v0",
 		"--local", "context=.",
 		"--local", "dockerfile="+path.Dir(a.Dockerfile),
 		"--opt", "filename="+path.Base(a.Dockerfile),
-		"--output", "type=image,name="+image+",push=true,registry.insecure=true")
+		"--output", "type=image,name="+image+",push=true")
+	buildCtx, cancelBuild := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancelBuild()
+	err = run(buildCtx, b, src, "buildctl", args...)
 	if err != nil {
 		return "", err
 	}
@@ -525,7 +547,14 @@ func main() {
 
 	addr := env("ADDR", ":8080")
 	log.Printf("builder-module on %s, core %s, buildkit %s", addr, coreURL, buildkit)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	httpServer := &http.Server{
+		Addr:              addr,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       time.Minute,
+	}
+	log.Fatal(httpServer.ListenAndServe())
 }
 
 // action reads the JSON object of strings the panel sends and answers with the
