@@ -4,11 +4,12 @@ Run the commands on a Linux Swarm manager from the Builder checkout.
 
 ## Deployment files for installers
 
-Published images contain their matching deployment files at
-`/usr/share/builder/deploy`. An installer can copy that directory from a
-created container without starting it. Use the same digest-pinned image for
-`BUILDER_IMAGE` when deploying the stack so the module and configuration come
-from the same build.
+Published images contain the shared module deployment bundle at
+`/usr/share/modularnost/deploy`. Its `manifest.json` names the Compose files in
+merge order and declares Builder's need for encrypted registry credentials.
+An installer can copy the directory from a created container. Use the same
+digest-pinned image for `BUILDER_IMAGE` when deploying the stack so the module
+and configuration come from the same build.
 
 The directory includes the base stack, the private registry pull overlay,
 the Caddy configuration, and the BuildKit startup files under `scripts/`.

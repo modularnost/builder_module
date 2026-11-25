@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "stack_files": [
+    "stack.yml",
+    "stack.registry-pull.yml"
+  ],
+  "registry_credentials": true
+}

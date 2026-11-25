@@ -102,7 +102,8 @@ jobs:
           container=
           trap 'if [ -n "$container" ]; then docker rm -v "$container" >/dev/null; fi; rm -rf "$bundle"' EXIT
           container=$(docker create --platform linux/amd64 "$CANDIDATE@$DIGEST")
-          docker cp "$container:/usr/share/builder/deploy/." "$bundle"
+          docker cp "$container:/usr/share/modularnost/deploy/." "$bundle"
+          cmp deployment/manifest.json "$bundle/manifest.json"
           for file in stack.yml stack.registry-pull.yml scripts/buildkitd.sh \
             scripts/buildkitd-network.sh scripts/buildkitd.toml scripts/registry-pull.Caddyfile; do
             cmp "$file" "$bundle/$file"

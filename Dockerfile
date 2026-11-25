@@ -13,12 +13,13 @@ RUN apk add --no-cache git ca-certificates \
     && addgroup -S -g 10001 builder \
     && adduser -S -D -u 10001 -G builder builder \
     && mkdir -m 0700 /data \
-    && chown 10001:10001 /data
+    && chown 10001:10001 /data \
+    && ln -s /usr/share/modularnost /usr/share/builder
 COPY --from=buildkit /usr/bin/buildctl /usr/bin/buildctl
 COPY --from=build /module /module
 COPY LICENSE /usr/share/licenses/builder-module/LICENSE
-COPY stack.yml stack.registry-pull.yml /usr/share/builder/deploy/
-COPY scripts/buildkitd.sh scripts/buildkitd-network.sh scripts/buildkitd.toml scripts/registry-pull.Caddyfile /usr/share/builder/deploy/scripts/
+COPY deployment/manifest.json stack.yml stack.registry-pull.yml /usr/share/modularnost/deploy/
+COPY scripts/buildkitd.sh scripts/buildkitd-network.sh scripts/buildkitd.toml scripts/registry-pull.Caddyfile /usr/share/modularnost/deploy/scripts/
 USER 10001:10001
 VOLUME /data
 EXPOSE 8080
