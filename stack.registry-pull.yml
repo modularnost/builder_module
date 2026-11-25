@@ -1,0 +1,36 @@
+# Overlay for stack.yml. The installer supplies secrets and a private TLS route.
+services:
+  registry-pull:
+    image: caddy:2.11.7@sha256:36c24ad91a7ff7bc4c87fe22bfa8df3c4b18da0773d73fc12ee2c52b98c0bb7e
+    networks:
+      buildnet: {}
+      pullnet:
+        aliases: [builder-registry-pull]
+    environment:
+      REGISTRY_PULL_HOST: "${REGISTRY_PULL_HOST:?Set the pull hostname without a port}"
+    configs:
+      - source: registry_pull_caddyfile
+        target: /etc/caddy/Caddyfile
+    secrets:
+      - {source: builder_registry_ca, target: /etc/registry-pull/registry-ca.pem, mode: 0400}
+      - {source: builder_pull_cert, target: /etc/registry-pull/proxy.pem, mode: 0400}
+      - {source: builder_pull_key, target: /etc/registry-pull/proxy-key.pem, mode: 0400}
+      - {source: builder_pull_client, target: /etc/registry-pull/registry-client.pem, mode: 0400}
+      - {source: builder_pull_client_key, target: /etc/registry-pull/registry-client-key.pem, mode: 0400}
+      - {source: builder_pull_users, target: /etc/registry-pull/users, mode: 0400}
+
+networks:
+  pullnet:
+    external: true
+    name: "${REGISTRY_PULL_NETWORK:?Set the private pull routing network}"
+
+configs:
+  registry_pull_caddyfile:
+    file: ./scripts/registry-pull.Caddyfile
+
+secrets:
+  builder_pull_cert: {external: true}
+  builder_pull_key: {external: true}
+  builder_pull_client: {external: true}
+  builder_pull_client_key: {external: true}
+  builder_pull_users: {external: true}

@@ -101,6 +101,20 @@ exact `REGISTRY_PULL` value. Verify that an anonymous request to `/v2/`
 returns `401` and that `docker login <host[:port]>` accepts the token.
 Open **Builder** in the panel to add and deploy an app.
 
+### Swarm pull proxy overlay
+
+`stack.registry-pull.yml` packages the same proxy as a Swarm service for
+provisioning by an installer. Apply it with `stack.yml`. The installer sets
+`REGISTRY_PULL_HOST` to the certificate hostname and `REGISTRY_PULL_NETWORK` to
+an existing private overlay network. Route TLS for `REGISTRY_PULL` to
+`builder-registry-pull:443` on that network with TCP passthrough. The service
+publishes no host port.
+
+Supply `builder_pull_cert` and `builder_pull_key` for the pull endpoint,
+`builder_pull_client` and `builder_pull_client_key` for registry mTLS, and
+`builder_pull_users` for the bcrypt users file. The service reuses
+`builder_registry_ca` from the base stack.
+
 ## Upgrade
 
 Use the stack, daemon script, and Builder image from the same revision. If

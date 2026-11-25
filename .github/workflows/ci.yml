@@ -28,6 +28,12 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Validate the Swarm registry pull overlay
+        env:
+          REGISTRY_PULL: registry.example.test
+          REGISTRY_PULL_HOST: registry.example.test
+          REGISTRY_PULL_NETWORK: builder-pull
+        run: docker stack config -c stack.yml -c stack.registry-pull.yml > /dev/null
 
   publish:
     if: github.event_name == 'push'
