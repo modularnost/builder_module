@@ -129,6 +129,49 @@ Supply `builder_pull_cert` and `builder_pull_key` for the pull endpoint,
 `builder_pull_users` for the bcrypt users file. The service reuses
 `builder_registry_ca` from the base stack.
 
+### Managed BuildKit worker
+
+`deployment/buildkit-worker.json` (packaged at
+`/usr/share/modularnost/deploy/buildkit-worker.json`) defines the BuildKit worker
+Swarm service for panel-managed installations. It uses the digest-pinned
+`moby/buildkit` image instead of `docker stack deploy` because Compose ignores
+`security_opt`, whereas the Swarm service API applies the unconfined seccomp
+and disabled AppArmor settings that `runc` needs inside a non-privileged
+service.
+
+The worker preserves process, filesystem, and `RUN` network isolation without
+granting Swarm `privileged` mode:
+
+- **Network**: attaches only to `buildnet` with alias `buildkitd` and is
+  explicitly excluded from `panelnet`. `BUILDKIT_BLOCKED_SUBNETS` must list
+  `panelnet`, `buildnet`, `docker_gwbridge`, and any other cluster overlay
+  subnets so `scripts/buildkitd-network.sh` blocks them from CNI `buildkit0`.
+- **Confinement**: requests only `SYS_ADMIN`, `NET_ADMIN`, and `SYS_PTRACE`
+  capabilities plus unconfined seccomp and disabled AppArmor on the worker
+  task so `runc` can remount `/sys/fs/cgroup` and isolate each `RUN` step in
+  its own PID, mount, and CNI network namespaces.
+- **mTLS**: mounts `builder_buildkit_ca`, `builder_buildkit_server`, and
+  `builder_buildkit_server_key` (`serverAuth`, SAN `buildkitd`) for gRPC on
+  port `1234`, plus `builder_registry_ca`, `builder_buildkit_registry_client`,
+  and `builder_buildkit_registry_client_key` (`clientAuth`) for pushing to
+  `registry:5000`.
+- **Placement and cache storage**: runs a single replica pinned to the node
+  holding the `buildkitd_state` volume at `/var/lib/buildkit`, with
+  `stop-first` updates so the previous task releases `buildkitd.lock` before a
+  replacement starts.
+- **Readiness and retry**: service startup alone is not readiness. The worker
+  healthcheck checks `buildctl --addr unix:///run/buildkit/buildkitd.sock debug workers`
+  and port `1234`, and the provisioner must confirm mTLS readiness with
+  `buildctl --addr tcp://buildkitd:1234 ... debug workers` using the module
+  client certificate (`builder_buildkit_client`). On retry, wait for stopping
+  worker tasks to exit so `buildkitd.lock` is released while preserving
+  `buildkitd_state`.
+
+Run `sh scripts/smoke-buildkit-worker.sh` on a Docker host with privileged
+containers available to verify mTLS readiness, `RUN` isolation against a
+fixture `panelnet` listener, push to an authenticated fixture registry, retry,
+and removal.
+
 ## Upgrade
 
 Use the stack, daemon script, and Builder image from the same revision. If
