@@ -2,6 +2,19 @@
 
 Run the commands on a Linux Swarm manager from the Builder checkout.
 
+## Deployment files for installers
+
+Published images contain their matching deployment files at
+`/usr/share/builder/deploy`. An installer can copy that directory from a
+created container without starting it. Use the same digest-pinned image for
+`BUILDER_IMAGE` when deploying the stack so the module and configuration come
+from the same build.
+
+The directory includes the base stack, the private registry pull overlay,
+the Caddy configuration, and the BuildKit startup files under `scripts/`.
+The installer supplies the cluster networks, registry route, and secrets
+described below.
+
 ## Image and panel network
 
 Set `BUILDER_IMAGE` to a tag or digest matching this checkout. If you build

@@ -17,6 +17,8 @@ RUN apk add --no-cache git ca-certificates \
 COPY --from=buildkit /usr/bin/buildctl /usr/bin/buildctl
 COPY --from=build /module /module
 COPY LICENSE /usr/share/licenses/builder-module/LICENSE
+COPY stack.yml stack.registry-pull.yml /usr/share/builder/deploy/
+COPY scripts/buildkitd.sh scripts/buildkitd-network.sh scripts/buildkitd.toml scripts/registry-pull.Caddyfile /usr/share/builder/deploy/scripts/
 USER 10001:10001
 VOLUME /data
 EXPOSE 8080
