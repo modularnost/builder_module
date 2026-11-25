@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "service_name": "buildkitd",
+  "image": "moby/buildkit:v0.35.1@sha256:baf6138eb8c37644800c7c913fba051e840ebb9ba13eaf92d92ef9a1712d0b4c",
+  "entrypoint": [
+    "/bin/sh"
+  ],
+  "command": [
+    "/etc/buildkit/network.sh"
+  ],
+  "port": 1234,
+  "replicas": 1,
+  "update_order": "stop-first",
+  "placement": {
+    "pin_to_storage_node": true
+  },
+  "network": {
+    "name": "buildnet",
+    "alias": "buildkitd",
+    "exclude_panel_network": true
+  },
+  "isolation": {
+    "capabilities": [
+      "SYS_ADMIN",
+      "NET_ADMIN",
+      "SYS_PTRACE"
+    ],
+    "seccomp": "unconfined",
+    "apparmor": "disabled",
+    "blocked_subnets_env": "BUILDKIT_BLOCKED_SUBNETS"
+  },
+  "storage": {
+    "volume": "buildkitd_state",
+    "target": "/var/lib/buildkit"
+  },
+  "configs": [
+    {
+      "source": "scripts/buildkitd.toml",
+      "target": "/etc/buildkit/buildkitd.toml",
+      "mode": "0444"
+    },
+    {
+      "source": "scripts/buildkitd-network.sh",
+      "target": "/etc/buildkit/network.sh",
+      "mode": "0555"
+    }
+  ],
+  "secrets": [
+    {
+      "name": "builder_buildkit_ca",
+      "target": "/etc/buildkit/tls/buildkit-ca.pem",
+      "role": "buildkit_ca",
+      "mode": "0400"
+    },
+    {
+      "name": "builder_buildkit_server",
+      "target": "/etc/buildkit/tls/buildkit-server.pem",
+      "role": "buildkit_server_cert",
+      "mode": "0400"
+    },
+    {
+      "name": "builder_buildkit_server_key",
+      "target": "/etc/buildkit/tls/buildkit-server-key.pem",
+      "role": "buildkit_server_key",
+      "mode": "0400"
+    },
+    {
+      "name": "builder_registry_ca",
+      "target": "/etc/buildkit/tls/registry-ca.pem",
+      "role": "registry_ca",
+      "mode": "0400"
+    },
+    {
+      "name": "builder_buildkit_registry_client",
+      "target": "/etc/buildkit/tls/registry-client.pem",
+      "role": "registry_client_cert",
+      "mode": "0400"
+    },
+    {
+      "name": "builder_buildkit_registry_client_key",
+      "target": "/etc/buildkit/tls/registry-client-key.pem",
+      "role": "registry_client_key",
+      "mode": "0400"
+    }
+  ],
+  "healthcheck": {
+    "test": [
+      "CMD-SHELL",
+      "buildctl --addr unix:///run/buildkit/buildkitd.sock debug workers >/dev/null 2>&1 && nc -z 127.0.0.1 1234"
+    ],
+    "interval": "5s",
+    "timeout": "5s",
+    "start_period": "5s",
+    "retries": 3
+  },
+  "readiness": {
+    "probe": "buildctl_debug_workers",
+    "address": "tcp://buildkitd:1234",
+    "ca_secret": "builder_buildkit_ca",
+    "client_cert_secret": "builder_buildkit_client",
+    "client_key_secret": "builder_buildkit_client_key"
+  }
+}
