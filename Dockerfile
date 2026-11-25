@@ -9,7 +9,8 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o
 FROM moby/buildkit:v0.35.1@sha256:baf6138eb8c37644800c7c913fba051e840ebb9ba13eaf92d92ef9a1712d0b4c AS buildkit
 
 FROM alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
-RUN apk add --no-cache git ca-certificates \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache git ca-certificates \
     && addgroup -S -g 10001 builder \
     && adduser -S -D -u 10001 -G builder builder \
     && mkdir -m 0700 /data \
