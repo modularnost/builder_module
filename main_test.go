@@ -168,3 +168,18 @@ func TestBuildLogKeepsTheTail(t *testing.T) {
 		t.Errorf("%d bytes, ends %q", len(got), got[len(got)-3:])
 	}
 }
+
+func TestBuildCoalescesLogNotifications(t *testing.T) {
+	notifications := 0
+	b := &build{notify: func() { notifications++ }}
+	b.Write([]byte("first"))
+	b.Write([]byte("second"))
+	if notifications != 1 || b.text() != "firstsecond" {
+		t.Fatalf("notifications=%d, log=%q", notifications, b.text())
+	}
+	b.last = time.Now().Add(-logRefreshInterval)
+	b.Write([]byte("third"))
+	if notifications != 2 {
+		t.Fatalf("notifications after the interval=%d", notifications)
+	}
+}
