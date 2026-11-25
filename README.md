@@ -8,6 +8,9 @@ service. Set an app domain to route traffic through Traefik.
 Builder is an early preview. Builds are started manually by panel
 administrators. Use repositories and Dockerfiles you trust.
 
+Builder runs up to two builds at a time. If both slots are busy, retry after a
+build finishes.
+
 ## Installation
 
 You need a Linux Docker Swarm manager and a panel that supports module contract
