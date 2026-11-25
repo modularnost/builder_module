@@ -90,6 +90,25 @@ jobs:
               image --no-progress --image-src remote --insecure --platform "$platform" --scanners vuln \
               --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$CANDIDATE@$DIGEST"
           done
+      - name: Validate the deployment bundle in the scanned image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REGISTRY_PULL: registry.example.test
+          REGISTRY_PULL_HOST: registry.example.test
+          REGISTRY_PULL_NETWORK: builder-pull
+        run: |
+          set -eu
+          bundle=$(mktemp -d)
+          container=
+          trap 'if [ -n "$container" ]; then docker rm -v "$container" >/dev/null; fi; rm -rf "$bundle"' EXIT
+          container=$(docker create --platform linux/amd64 "$CANDIDATE@$DIGEST")
+          docker cp "$container:/usr/share/builder/deploy/." "$bundle"
+          for file in stack.yml stack.registry-pull.yml scripts/buildkitd.sh \
+            scripts/buildkitd-network.sh scripts/buildkitd.toml scripts/registry-pull.Caddyfile; do
+            cmp "$file" "$bundle/$file"
+          done
+          BUILDER_IMAGE="$IMAGE@$DIGEST" docker stack config \
+            -c "$bundle/stack.yml" -c "$bundle/stack.registry-pull.yml" >/dev/null
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
